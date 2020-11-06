@@ -1,20 +1,5 @@
-[package]
-name = "vcad"
-version = "0.1.0"
-authors = ["erank"]
-edition = "2018"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-cgmath = "0.16.1"
-gl = "0.10.0"
-image = "0.19.0"
-# only needed from chapter 3 on
-tobj = "0.1.6"
-num = "0.2.0"
-rand = "0.5.5"
-
-[dependencies.glfw]
-git = "https://github.com/bjz/glfw-rs.git"
-default-features = false
+members = [
+    "vcad",
+]

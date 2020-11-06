@@ -18,11 +18,54 @@
 			"problemMatcher": [
 				"$rustc"
 			],
+			"group": "build",
+			"label": "build"
+		},
+		{
+			"type": "cargo",
+			"command": "check",
+			"env": {
+				"LIB": "${env:GLFW_LIB}"
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": true
+			},
+			"problemMatcher": [
+				"$rustc"
+			],
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "build"
+			"label": "check"
+		},
+		{
+			"type": "cargo",
+			"command": "test",
+			"env": {
+				"LIB": "${env:GLFW_LIB}"
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": true
+			},
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			},
+			"label": "test"
 		}
 	]
 }
