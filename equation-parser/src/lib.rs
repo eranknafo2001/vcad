@@ -1,7 +1,10 @@
+mod compiler;
+mod syntax_tree_creator;
+mod tokenizer;
+
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+mod tests;
+
+pub use compiler::Compiler;
+pub use syntax_tree_creator::{OptionalSymbols, PatternType, SyntaxTreeCreatorError};
+pub use tokenizer::TokenizerError;
