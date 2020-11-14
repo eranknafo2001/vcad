@@ -23,7 +23,7 @@ enum Tokens {
     Param,
 }
 
-#[derive(Hash, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq)]
 enum Symbol {
     Program,
     Value,
@@ -197,6 +197,7 @@ fn func_pattern(mut items: Vec<NodeResult>) -> Result<NodeResult, Box<dyn Error>
     Ok(NodeResult::Node(Node::Functions(function, Box::new(value))))
 }
 
+#[derive(Debug)]
 enum NodeResult {
     Function(MathematicalFunctions),
     Operator(Operators),
@@ -223,8 +224,8 @@ fn create_compiler() -> Compiler<Tokens, Symbol, NodeResult> {
             (Cos, escape("cos")),
             (Sin, escape("sin")),
             (Comma, escape(",")),
-            (Float, String::from("\\d+.\\d+")),
-            (Int, String::from("\\d+?")),
+            (Float, String::from("\\d+\\.\\d+")),
+            (Int, String::from("\\d+")),
             (Var, escape("t")),
             (Param, String::from("[a-z|A-Z][a-z|A-z|0-9|_|-]*")),
         ]
@@ -336,12 +337,21 @@ fn create_compiler() -> Compiler<Tokens, Symbol, NodeResult> {
             ),
             (
                 Symbol::Value,
-                vec![OptionalSymbols::Token(Tokens::Float)],
-                |mut items| Ok(items.swap_remove(0)),
+                vec![
+                    OptionalSymbols::Token(Tokens::OpenBrackets),
+                    OptionalSymbols::Symbol(Symbol::Value),
+                    OptionalSymbols::Token(Tokens::OpenBrackets),
+                ],
+                |mut items| Ok(items.swap_remove(1)),
             ),
             (
                 Symbol::Value,
                 vec![OptionalSymbols::Token(Tokens::Int)],
+                |mut items| Ok(items.swap_remove(0)),
+            ),
+            (
+                Symbol::Value,
+                vec![OptionalSymbols::Token(Tokens::Float)],
                 |mut items| Ok(items.swap_remove(0)),
             ),
             (
@@ -388,6 +398,18 @@ fn create_compiler() -> Compiler<Tokens, Symbol, NodeResult> {
 }
 
 #[test]
+fn test_compile_brackets() {
+    let compiler = create_compiler();
+
+    let t = compiler.compile("(5)").unwrap();
+    let t = match t {
+        NodeResult::Node(e) => e,
+        _ => panic!("error"),
+    };
+    assert_eq!(t, Node::Scalar(5f32));
+}
+
+#[test]
 fn test_compile_scalar() {
     let compiler = create_compiler();
 
@@ -423,7 +445,7 @@ fn test_compile_complex() {
     let compiler = create_compiler();
 
     let t = compiler
-        .compile("(x+t*5+2  )/ ( log(s,t)*cos(a)+sin(t)^2 )")
+        .compile("(x+t*5+2.2  )/ ( log(s,t)*cos(a)+sin(t)^2 )")
         .unwrap();
     let t = match t {
         NodeResult::Node(e) => e,
@@ -443,7 +465,7 @@ fn test_compile_complex() {
                         Box::new(Node::Var),
                         Box::new(Node::Scalar(5f32))
                     )),
-                    Box::new(Node::Scalar(2f32))
+                    Box::new(Node::Scalar(2.2f32))
                 ))
             )),
             Box::new(Node::Operator(

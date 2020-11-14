@@ -9,8 +9,11 @@ pub struct Compiler<TokenEnum: Clone + Hash + Debug, SymbolEnum: Clone + Hash, U
     program_token: SymbolEnum,
 }
 
-impl<TokenEnum: Clone + Hash + Eq + Debug, SymbolEnum: Clone + Hash + Eq, UserResult>
-    Compiler<TokenEnum, SymbolEnum, UserResult>
+impl<
+        TokenEnum: Clone + Hash + Eq + Debug,
+        SymbolEnum: Debug + Clone + Hash + Eq,
+        UserResult: Debug,
+    > Compiler<TokenEnum, SymbolEnum, UserResult>
 {
     pub fn new(
         tokens: Vec<(TokenEnum, String)>,
@@ -28,6 +31,7 @@ impl<TokenEnum: Clone + Hash + Eq + Debug, SymbolEnum: Clone + Hash + Eq, UserRe
 
     pub fn compile(&self, text: &str) -> Result<UserResult, Box<dyn Error>> {
         let tokens = self.tokenizer.tokenize(text)?;
+        // println!("{:?}", tokens);
         Ok(self.pattern_analyzer.analyze(tokens, &self.program_token)?)
     }
 }

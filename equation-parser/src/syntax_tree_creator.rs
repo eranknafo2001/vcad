@@ -22,9 +22,13 @@ struct StateableIterator<'t, T> {
     index: usize,
 }
 
-impl<'t, T> StateableIterator<'t, T> {
+impl<'t, T: Debug> StateableIterator<'t, T> {
     pub fn new(values: &'t Vec<T>) -> Self {
         Self { values, index: 0 }
+    }
+
+    pub fn get_remanding_values(&self) -> &[T] {
+        &self.values[self.index..]
     }
 
     pub fn get_state(&self) -> usize {
@@ -53,14 +57,14 @@ pub enum OptionalResults<SymbolEnum: Clone, TokenEnum: Clone> {
     Symbol(SymbolEnum),
     Token(TokenEnum),
 }
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum OptionalSymbols<SymbolEnum: Clone + Hash, TokenEnum: Clone + Hash + Debug> {
     Symbol(SymbolEnum),
     Token(TokenEnum),
     EOF,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 enum OptionalInputs<TokenEnum: Eq> {
     Token(TokenEnum),
     EOF,
@@ -78,8 +82,11 @@ pub struct SyntaxTreeCreator<SymbolEnum: Clone + Hash, TokenEnum: Clone + Hash +
     token_and_value_to_func_result: fn(TokenEnum, &str) -> UserResult,
 }
 
-impl<SymbolEnum: Eq + Clone + Hash, TokenEnum: Eq + Clone + Hash + Debug, UserResult>
-    SyntaxTreeCreator<SymbolEnum, TokenEnum, UserResult>
+impl<
+        SymbolEnum: Debug + Eq + Clone + Hash,
+        TokenEnum: Eq + Clone + Hash + Debug,
+        UserResult: Debug,
+    > SyntaxTreeCreator<SymbolEnum, TokenEnum, UserResult>
 {
     pub fn new(
         patterns: Vec<PatternType<SymbolEnum, TokenEnum, UserResult>>,
@@ -105,7 +112,7 @@ impl<SymbolEnum: Eq + Clone + Hash, TokenEnum: Eq + Clone + Hash + Debug, UserRe
         &self,
         pattern: &Vec<OptionalSymbols<SymbolEnum, TokenEnum>>,
         tokens: &mut StateableIterator<(OptionalInputs<&TokenEnum>, &'a str)>,
-        exclude_patterns: &mut HashSet<Vec<OptionalSymbols<SymbolEnum, TokenEnum>>>,
+        mut exclude_patterns: HashSet<Vec<OptionalSymbols<SymbolEnum, TokenEnum>>>,
     ) -> Result<Vec<(OptionalResults<SymbolEnum, TokenEnum>, UserResult)>, Box<dyn Error>> {
         let mut values: Vec<(OptionalResults<SymbolEnum, TokenEnum>, UserResult)> = vec![];
         for (idx, symbol) in pattern.iter().enumerate() {
@@ -124,21 +131,21 @@ impl<SymbolEnum: Eq + Clone + Hash, TokenEnum: Eq + Clone + Hash + Debug, UserRe
                             return Err(Box::new(SyntaxTreeCreatorError::SymbolNotFound))
                         }
                     }
-                    exclude_patterns.clear();
+                    exclude_patterns = HashSet::new();
                     values.push((
                         OptionalResults::Token(symbol.clone()),
                         (self.token_and_value_to_func_result)(symbol.clone(), *word),
                     ));
                 }
                 OptionalSymbols::Symbol(symbol) => {
-                    let mut exclude_patterns_temp: HashSet<_> =
-                        exclude_patterns.iter().cloned().collect();
+                    let mut exclude_patterns_temp =
+                        exclude_patterns.iter().cloned().collect::<HashSet<_>>();
 
                     if idx == 0 {
                         exclude_patterns_temp.insert(pattern.clone());
                     }
 
-                    let value = self.find_symbol(tokens, symbol, &mut exclude_patterns_temp)?;
+                    let value = self.find_symbol(tokens, symbol, exclude_patterns_temp)?;
                     values.push((OptionalResults::Symbol(symbol.clone()), value));
                 }
                 OptionalSymbols::EOF => {
@@ -164,16 +171,22 @@ impl<SymbolEnum: Eq + Clone + Hash, TokenEnum: Eq + Clone + Hash + Debug, UserRe
         &self,
         tokens: &mut StateableIterator<(OptionalInputs<&TokenEnum>, &str)>,
         expected_symbol: &SymbolEnum,
-        exclude_patterns: &mut HashSet<Vec<OptionalSymbols<SymbolEnum, TokenEnum>>>,
+        exclude_patterns: HashSet<Vec<OptionalSymbols<SymbolEnum, TokenEnum>>>,
     ) -> Result<UserResult, Box<dyn Error>> {
         let patterns = self.filter_patterns_by_symbol(expected_symbol);
         let start_state = tokens.get_state();
+        println!("exclude_patterns: {:?}", exclude_patterns);
         for (_, pattern, func) in
             Self::filter_patterns_with_excluded_patterns(&exclude_patterns, &patterns)
         {
             tokens.set_state(start_state);
+            println!("pattern: {:?}", pattern);
+            println!(
+                "tokens remanding values {:?}",
+                tokens.get_remanding_values()
+            );
 
-            match self.match_pattern(&pattern, tokens, exclude_patterns) {
+            match self.match_pattern(&pattern, tokens, exclude_patterns.clone()) {
                 Ok(values) => {
                     let values = values
                         .into_iter()
@@ -209,13 +222,73 @@ impl<SymbolEnum: Eq + Clone + Hash, TokenEnum: Eq + Clone + Hash + Debug, UserRe
 
         tokens.push((OptionalInputs::EOF, ""));
         let mut tokens = StateableIterator::new(&tokens);
-        self.find_symbol(&mut tokens, &expected_symbol, &mut HashSet::new())
+        self.find_symbol(&mut tokens, &expected_symbol, HashSet::new())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::hashset;
+
+    #[test]
+    fn test_filter_patterns_with_excluded_patterns() {
+        let patterns: Vec<PatternType<SymbolEnum, TokenEnum, String>> = {
+            use OptionalSymbols::{Symbol, Token};
+            vec![
+                (
+                    SymbolEnum::Program,
+                    vec![Symbol(SymbolEnum::Value), Token(TokenEnum::EOF)],
+                    |mut items| Ok(items.swap_remove(0)),
+                ),
+                (
+                    SymbolEnum::Value,
+                    vec![
+                        Symbol(SymbolEnum::Value),
+                        Token(TokenEnum::And),
+                        Symbol(SymbolEnum::Value),
+                    ],
+                    operator,
+                ),
+                (
+                    SymbolEnum::Value,
+                    vec![
+                        Symbol(SymbolEnum::Value),
+                        Token(TokenEnum::Or),
+                        Symbol(SymbolEnum::Value),
+                    ],
+                    operator,
+                ),
+                (
+                    SymbolEnum::Value,
+                    vec![
+                        Token(TokenEnum::OpenBrackets),
+                        Symbol(SymbolEnum::Value),
+                        Token(TokenEnum::CloseBrackets),
+                    ],
+                    |items| Ok(items[1].clone()),
+                ),
+                (
+                    SymbolEnum::Value,
+                    vec![Token(TokenEnum::Not), Symbol(SymbolEnum::Value)],
+                    |items| Ok(format!("not {}", items[1])),
+                ),
+                (
+                    SymbolEnum::Value,
+                    vec![Token(TokenEnum::Var)],
+                    |mut items| Ok(items.swap_remove(0)),
+                ),
+            ]
+        };
+        let a =
+            SyntaxTreeCreator::<SymbolEnum, TokenEnum, String>::filter_patterns_with_excluded_patterns(
+                &hashset![
+                    vec![OptionalSymbols::Token(TokenEnum::Var)],
+                    vec![OptionalSymbols::Token(TokenEnum::Not),
+                        OptionalSymbols::Symbol(SymbolEnum::Value)]],
+                &patterns.iter().collect());
+        assert_eq!(a.len(), patterns.len() - 2);
+    }
 
     #[derive(Debug, Eq, PartialEq, Hash, Clone)]
     enum SymbolEnum {
@@ -307,11 +380,7 @@ mod tests {
             (&TokenEnum::EOF, ""),
         ];
 
-        let pattern_analyzer = SyntaxTreeCreator::new(patterns, |_, word| {
-            let mut st = String::new();
-            st.push_str(word);
-            st
-        });
+        let pattern_analyzer = SyntaxTreeCreator::new(patterns, |_, word| word.to_string());
 
         let value = pattern_analyzer
             .analyze(tokens, &SymbolEnum::Program)
